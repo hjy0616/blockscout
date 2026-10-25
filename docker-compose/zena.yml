@@ -145,9 +145,6 @@ services:
       # 시작 직후 첫 계산이 실패하면 다음 날 09:08 KST까지 NaN으로 남는다. 매시 8분으로 바꿔 1시간 안에 회복되게 한다.
       STATS_UPDATE_GROUPS__SCHEDULES__YESTERDAY_TXNS_GROUP: '0 8 * * * * *'
       STATS_UPDATE_GROUPS__SCHEDULES__NEW_TXNS_WINDOW_GROUP: '0 8 * * * * *'
-      # 실시간에 가까운 값. /txs의 Transactions (24h)는 기본 매시 → 5분, /stats 일별 거래 차트(오늘 진행분 포함)는 기본 3시간 → 10분.
-      STATS_UPDATE_GROUPS__SCHEDULES__TXNS_STATS_24H_GROUP: '0 */5 * * * * *'
-      STATS_UPDATE_GROUPS__SCHEDULES__NEW_TXNS_GROUP: '0 */10 * * * * *'
       # /stats 페이지의 수수료 등 단위. 기본값이 ETH로 되어 있다.
       STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL: ZNNT
 
