@@ -95,8 +95,11 @@ services:
         NEXT_PUBLIC_API_HOST: ${ZENA_HOST:-localhost}
         NEXT_PUBLIC_API_PROTOCOL: ${ZENA_PROTOCOL:-http}
         NEXT_PUBLIC_API_WEBSOCKET_PROTOCOL: ${ZENA_WS_PROTOCOL:-ws}
-        NEXT_PUBLIC_STATS_API_HOST: ${ZENA_STATS_URL:-http://localhost:8080}
-        NEXT_PUBLIC_VISUALIZE_API_HOST: ${ZENA_VISUALIZE_URL:-http://localhost:8081}
+        # stats와 visualizer도 같은 도메인의 경로로 연결한다 (zena-proxy/default.conf.template).
+        NEXT_PUBLIC_STATS_API_HOST: ${ZENA_PROTOCOL:-http}://${ZENA_HOST:-localhost}
+        NEXT_PUBLIC_STATS_API_BASE_PATH: /stats-service
+        NEXT_PUBLIC_VISUALIZE_API_HOST: ${ZENA_PROTOCOL:-http}://${ZENA_HOST:-localhost}
+        NEXT_PUBLIC_VISUALIZE_API_BASE_PATH: /visualizer-service
         # 로고는 도쿄 S3(zena-scan-butket)에서 시작할 때 내려받는다. 파비콘도 ICON으로 자동 생성된다.
         NEXT_PUBLIC_NETWORK_LOGO: https://zena-scan-butket.s3.ap-northeast-1.amazonaws.com/zenalogo_light.svg
         NEXT_PUBLIC_NETWORK_LOGO_DARK: https://zena-scan-butket.s3.ap-northeast-1.amazonaws.com/zenalogo_dark.svg
@@ -144,9 +147,12 @@ services:
       - backend
       - frontend
       - stats
+      - visualizer
     extends:
       file: ./services/nginx.yml
       service: proxy
+    volumes:
+      - "./zena-proxy:/etc/nginx/templates"
 
 volumes:
   backend-dets:

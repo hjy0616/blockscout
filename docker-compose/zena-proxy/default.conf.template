@@ -1,0 +1,44 @@
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+# HTTPS는 앞단(ALB)에서 끝나고 여기엔 http로 들어온다. 원래 스킴은 ALB가 넣어준 헤더를 그대로 넘긴다.
+map $http_x_forwarded_proto $forwarded_proto {
+  default $http_x_forwarded_proto;
+  ''      $scheme;
+}
+
+# 한 도메인(포트 80) 아래에 사이트, API, stats, visualizer를 경로로 나눠 둔다.
+server {
+    listen       80;
+    server_name  _;
+    proxy_http_version    1.1;
+    proxy_set_header      Host "$host";
+    proxy_set_header      X-Real-IP "$remote_addr";
+    proxy_set_header      X-Forwarded-For "$proxy_add_x_forwarded_for";
+    proxy_set_header      X-Forwarded-Proto "$forwarded_proto";
+    proxy_set_header      Upgrade "$http_upgrade";
+    proxy_set_header      Connection $connection_upgrade;
+    proxy_cache_bypass    $http_upgrade;
+
+    location ~ ^/(api(?!-docs$)|socket|sitemap.xml|auth/auth0|auth/auth0/callback|auth/logout) {
+        proxy_pass            ${BACK_PROXY_PASS};
+    }
+
+    location /stats-service/ {
+        proxy_pass            http://stats:8050/;
+    }
+
+    location /visualizer-service/ {
+        proxy_pass            http://visualizer:8050/;
+        proxy_buffering       off;
+        proxy_connect_timeout 30m;
+        proxy_read_timeout    30m;
+        proxy_send_timeout    30m;
+    }
+
+    location / {
+        proxy_pass            ${FRONT_PROXY_PASS};
+    }
+}
