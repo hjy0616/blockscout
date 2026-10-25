@@ -134,6 +134,8 @@ services:
       file: ./services/stats.yml
       service: stats
     environment:
+      # 기본값은 호스트 80번(nginx) 경유인데, 서버에선 80번을 Caddy가 쓰므로 백엔드로 바로 붙는다.
+      STATS__BLOCKSCOUT_API_URL: http://backend:4000
       STATS__DB_URL: postgres://stats:${ZENA_STATS_DB_PASSWORD:-n0uejXPl61ci6ldCuE2gQU5Y}@stats-db:5432/stats
       STATS__BLOCKSCOUT_DB_URL: postgresql://blockscout:${ZENA_DB_PASSWORD:-ceWb1MeLBEeOIfk65gU8EjF8}@db:5432/blockscout
       # 홈 화면 Total blocks/txns는 stats 서비스 값인데 기본 갱신이 2시간마다라 1분으로 줄인다.
@@ -142,17 +144,46 @@ services:
       # /stats 페이지의 수수료 등 단위. 기본값이 ETH로 되어 있다.
       STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL: ZNNT
 
+  # services/nginx.yml은 80/8080/8081을 호스트에 고정으로 열어서 extends 대신 직접 정의한다.
   proxy:
+    image: nginx
+    container_name: proxy
+    restart: always
     depends_on:
       - backend
       - frontend
       - stats
       - visualizer
-    extends:
-      file: ./services/nginx.yml
-      service: proxy
     volumes:
       - "./zena-proxy:/etc/nginx/templates"
+    environment:
+      BACK_PROXY_PASS: http://backend:4000
+      FRONT_PROXY_PASS: http://frontend:3000
+    ports:
+      # 로컬은 80. HTTPS 서버에서는 Caddy가 80/443을 쓰므로 127.0.0.1:8000 같은 내부 주소로 둔다.
+      - "${ZENA_PROXY_BIND:-80}:80"
+
+  # HTTPS 서버용. .env에 COMPOSE_PROFILES=https 를 넣으면 같이 뜬다.
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: always
+    profiles:
+      - https
+    depends_on:
+      - proxy
+    environment:
+      ZENA_HOST: ${ZENA_HOST:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./zena-caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # 발급받은 인증서가 여기 남는다. 지우면 재발급되는데 Let's Encrypt 발급 횟수 제한에 걸릴 수 있다.
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   backend-dets:
+  caddy-data:
+  caddy-config:

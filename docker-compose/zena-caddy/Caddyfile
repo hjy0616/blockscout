@@ -1,0 +1,5 @@
+# 실제 도메인이면 Let's Encrypt 인증서를 자동 발급·갱신하고 http는 https로 넘긴다.
+# (localhost면 Caddy 자체 인증서로 https 테스트용)
+{$ZENA_HOST} {
+	reverse_proxy proxy:80
+}
