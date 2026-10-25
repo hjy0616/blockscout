@@ -1,0 +1,142 @@
+version: '3.9'
+
+# Zena Network(zena_15150-1, Cosmos SDK + EVM) 연결용 설정.
+# 직접 실행하지 말고 ./zena.sh up -d 로 띄운다 (TRACE_FIRST_BLOCK을 현재 블록으로 채워줌).
+
+services:
+  redis-db:
+    extends:
+      file: ./services/redis.yml
+      service: redis-db
+
+  db-init:
+    extends:
+      file: ./services/db.yml
+      service: db-init
+
+  db:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    extends:
+      file: ./services/db.yml
+      service: db
+
+  backend:
+    depends_on:
+      - db
+      - redis-db
+    extends:
+      file: ./services/backend.yml
+      service: backend
+    # 공개 이미지(ghcr latest)는 9.0.2에서 멈춰 있어 이 소스(v12.0.3)와 env 형식이 안 맞는다. 소스로 직접 빌드한다.
+    image: blockscout-zena:12.0.3
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+      args:
+        RELEASE_VERSION: 12.0.3
+    links:
+      - db:database
+    environment:
+        ETHEREUM_JSONRPC_VARIANT: 'geth'
+        ETHEREUM_JSONRPC_HTTP_URL: https://evm.zena-ai.io/
+        ETHEREUM_JSONRPC_TRACE_URL: https://evm.zena-ai.io/
+        ETHEREUM_JSONRPC_WS_URL: wss://evm.zena-ai.io/ws
+        CHAIN_ID: '15150'
+        COIN: ZNNT
+        COIN_NAME: Znnt
+        # 노드가 최근 약 539블록(약 27분) 상태만 보관하는 프루닝 노드라서,
+        # 과거 시점 잔액·trace 요청은 실패하고 Blockscout는 실패한 trace를 계속 재시도한다.
+        # 그래서 trace와 과거 잔액은 실행 시점 블록부터만 요청한다.
+        ETHEREUM_JSONRPC_DISABLE_ARCHIVE_BALANCES: 'true'
+        TRACE_FIRST_BLOCK: ${TRACE_FIRST_BLOCK:?./zena.sh 로 실행하세요}
+        # Cosmos EVM은 블록 보상을 EVM으로 노출하지 않는다.
+        INDEXER_DISABLE_BLOCK_REWARD_FETCHER: 'true'
+        # 기본 2시간이라 총 블록 수와 "Blocks Indexed" 비율(분자가 이 캐시)이 2시간 동안 멈춰 보인다.
+        CACHE_BLOCK_COUNT_PERIOD: 1m
+        CACHE_TXS_COUNT_PERIOD: 1m
+
+  visualizer:
+    extends:
+      file: ./services/visualizer.yml
+      service: visualizer
+
+  sig-provider:
+    extends:
+      file: ./services/sig-provider.yml
+      service: sig-provider
+
+  frontend:
+    depends_on:
+      - backend
+    extends:
+      file: ./services/frontend.yml
+      service: frontend
+    environment:
+        NEXT_PUBLIC_NETWORK_NAME: Zena Network
+        NEXT_PUBLIC_NETWORK_SHORT_NAME: Zena
+        NEXT_PUBLIC_NETWORK_ID: '15150'
+        NEXT_PUBLIC_NETWORK_RPC_URL: https://evm.zena-ai.io
+        NEXT_PUBLIC_NETWORK_CURRENCY_NAME: Znnt
+        NEXT_PUBLIC_NETWORK_CURRENCY_SYMBOL: ZNNT
+        NEXT_PUBLIC_NETWORK_CURRENCY_DECIMALS: '18'
+        NEXT_PUBLIC_IS_TESTNET: 'false'
+        # 접속 주소. 서버에서는 docker-compose/.env 에 ZENA_* 값을 넣는다 (기본값은 로컬 실행용).
+        NEXT_PUBLIC_APP_HOST: ${ZENA_HOST:-localhost}
+        NEXT_PUBLIC_APP_PROTOCOL: ${ZENA_PROTOCOL:-http}
+        NEXT_PUBLIC_API_HOST: ${ZENA_HOST:-localhost}
+        NEXT_PUBLIC_API_PROTOCOL: ${ZENA_PROTOCOL:-http}
+        NEXT_PUBLIC_API_WEBSOCKET_PROTOCOL: ${ZENA_WS_PROTOCOL:-ws}
+        NEXT_PUBLIC_STATS_API_HOST: ${ZENA_STATS_URL:-http://localhost:8080}
+        NEXT_PUBLIC_VISUALIZE_API_HOST: ${ZENA_VISUALIZE_URL:-http://localhost:8081}
+        # 로고는 도쿄 S3(zena-scan-butket)에서 시작할 때 내려받는다. 파비콘도 ICON으로 자동 생성된다.
+        NEXT_PUBLIC_NETWORK_LOGO: https://zena-scan-butket.s3.ap-northeast-1.amazonaws.com/zenalogo_light.svg
+        NEXT_PUBLIC_NETWORK_LOGO_DARK: https://zena-scan-butket.s3.ap-northeast-1.amazonaws.com/zenalogo_dark.svg
+        NEXT_PUBLIC_NETWORK_ICON: https://zena-scan-butket.s3.ap-northeast-1.amazonaws.com/whiteLogo.svg
+        NEXT_PUBLIC_NETWORK_ICON_DARK: https://zena-scan-butket.s3.ap-northeast-1.amazonaws.com/blackLogo.svg
+        NEXT_PUBLIC_AD_BANNER_PROVIDER: none
+        NEXT_PUBLIC_AD_TEXT_PROVIDER: none
+        # accent는 보라색. 기본 테마의 blue.N 자리를 같은 단계의 purple.N으로 바꾼 것.
+        NEXT_PUBLIC_COLOR_THEME_OVERRIDES: "{'hover':{'_light':{'value':'{colors.purple.400}'},'_dark':{'value':'{colors.purple.400}'}},'selected':{'control':{'text':{'_light':{'value':'{colors.purple.700}'}},'bg':{'_light':{'value':'{colors.purple.50}'}}},'option':{'bg':{'_light':{'value':'{colors.purple.500}'},'_dark':{'value':'{colors.purple.500}'}}}},'button':{'primary':{'_light':{'value':'{colors.purple.600}'},'_dark':{'value':'{colors.purple.600}'}}},'link':{'primary':{'_light':{'value':'{colors.purple.600}'},'_dark':{'value':'{colors.purple.300}'}}},'graph':{'line':{'_light':{'value':'{colors.purple.500}'},'_dark':{'value':'{colors.purple.200}'}},'gradient':{'start':{'_light':{'value':'rgba(183, 148, 244, 0.3)'},'_dark':{'value':'rgba(183, 148, 244, 0.3)'}},'stop':{'_light':{'value':'rgba(183, 148, 244, 0)'},'_dark':{'value':'rgba(183, 148, 244, 0)'}}}},'navigation':{'bg':{'selected':{'_light':{'value':'{colors.purple.50}'}}},'text':{'selected':{'_light':{'value':'{colors.purple.700}'}}}},'tabs':{'text':{'primary':{'_light':{'value':'{colors.purple.700}'},'_dark':{'value':'{colors.purple.100}'}}}}}"
+        NEXT_PUBLIC_HOMEPAGE_HERO_BANNER_CONFIG: "{'background':['linear-gradient(90deg, #6B46C1 0%, #9F7AEA 100%)','linear-gradient(90deg, #44337A 0%, #6B46C1 100%)'],'text_color':['#FFFFFF','#FFFFFF']}"
+
+  stats-db-init:
+    extends:
+      file: ./services/stats.yml
+      service: stats-db-init
+
+  stats-db:
+    depends_on:
+      stats-db-init:
+        condition: service_completed_successfully
+    extends:
+      file: ./services/stats.yml
+      service: stats-db
+
+  stats:
+    depends_on:
+      - stats-db
+      - backend
+    extends:
+      file: ./services/stats.yml
+      service: stats
+    environment:
+      # 홈 화면 Total blocks/txns는 stats 서비스 값인데 기본 갱신이 2시간마다라 1분으로 줄인다.
+      STATS_UPDATE_GROUPS__SCHEDULES__TOTAL_BLOCKS_GROUP: '0 * * * * * *'
+      STATS_UPDATE_GROUPS__SCHEDULES__TOTAL_TXNS_GROUP: '0 * * * * * *'
+      # /stats 페이지의 수수료 등 단위. 기본값이 ETH로 되어 있다.
+      STATS_CHARTS__TEMPLATE_VALUES__NATIVE_COIN_SYMBOL: ZNNT
+
+  proxy:
+    depends_on:
+      - backend
+      - frontend
+      - stats
+    extends:
+      file: ./services/nginx.yml
+      service: proxy
+
+volumes:
+  backend-dets:
