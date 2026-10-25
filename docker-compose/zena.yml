@@ -21,6 +21,9 @@ services:
     extends:
       file: ./services/db.yml
       service: db
+    # 비밀번호는 DB를 처음 만들 때만 적용된다. 서버에서는 첫 실행 전에 .env에 넣는다.
+    environment:
+      POSTGRES_PASSWORD: ${ZENA_DB_PASSWORD:-ceWb1MeLBEeOIfk65gU8EjF8}
 
   backend:
     depends_on:
@@ -40,6 +43,9 @@ services:
     links:
       - db:database
     environment:
+        # 기본값은 Blockscout 공개 기본값(로컬용). 운영 서버는 .env의 ZENA_* 로 바꾼다.
+        DATABASE_URL: postgresql://blockscout:${ZENA_DB_PASSWORD:-ceWb1MeLBEeOIfk65gU8EjF8}@db:5432/blockscout
+        SECRET_KEY_BASE: ${ZENA_SECRET_KEY_BASE:-56NtB48ear7+wMSf0IQuWDAAazhpb31qyc7GiyspBP2vh7t5zlCsF5QDv76chXeN}
         ETHEREUM_JSONRPC_VARIANT: 'geth'
         ETHEREUM_JSONRPC_HTTP_URL: https://evm.zena-ai.io/
         ETHEREUM_JSONRPC_TRACE_URL: https://evm.zena-ai.io/
@@ -114,6 +120,8 @@ services:
     extends:
       file: ./services/stats.yml
       service: stats-db
+    environment:
+      POSTGRES_PASSWORD: ${ZENA_STATS_DB_PASSWORD:-n0uejXPl61ci6ldCuE2gQU5Y}
 
   stats:
     depends_on:
@@ -123,6 +131,8 @@ services:
       file: ./services/stats.yml
       service: stats
     environment:
+      STATS__DB_URL: postgres://stats:${ZENA_STATS_DB_PASSWORD:-n0uejXPl61ci6ldCuE2gQU5Y}@stats-db:5432/stats
+      STATS__BLOCKSCOUT_DB_URL: postgresql://blockscout:${ZENA_DB_PASSWORD:-ceWb1MeLBEeOIfk65gU8EjF8}@db:5432/blockscout
       # 홈 화면 Total blocks/txns는 stats 서비스 값인데 기본 갱신이 2시간마다라 1분으로 줄인다.
       STATS_UPDATE_GROUPS__SCHEDULES__TOTAL_BLOCKS_GROUP: '0 * * * * * *'
       STATS_UPDATE_GROUPS__SCHEDULES__TOTAL_TXNS_GROUP: '0 * * * * * *'
